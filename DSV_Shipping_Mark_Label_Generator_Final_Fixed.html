@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DSV Shipping Mark Label Generator - Final Fixed</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --line: #cfd7e4;
+      --line-dark: #aeb8c8;
+      --text: #1f2937;
+      --muted: #5b6475;
+      --primary: #005a9c;
+      --danger: #c0392b;
+      --shadow: 0 6px 18px rgba(0,0,0,.06);
+      --font-main: Tahoma, Arial, sans-serif;
+
+      --label-header-size: 22px;
+      --label-title-size: 36px;
+      --label-value-size: 60px;
+      --label-counter-size: 110px;
+      --counter-of-size: 50px;
+
+      /* spacing inherited from V12/V11 */
+      --page-width: 210mm;
+      --page-height: 297mm;
+      --label-padding-top: 10mm;
+      --label-padding-side: 14mm;
+      --label-padding-bottom: 10mm;
+      --header-gap: 4mm;
+      --title-to-value-gap: 6mm;
+      --sid-block-to-hbl-title-gap: 10mm;
+      --hbl-title-to-value-gap: 6mm;
+      --counter-lift: 2mm;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; font-family: var(--font-main); color: var(--text); background: var(--bg); }
+    .app { display: grid; grid-template-columns: 440px 1fr; gap: 16px; min-height: 100vh; padding: 16px; }
+    .panel, .workspace { background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
+    .panel { padding: 18px; position: sticky; top: 16px; height: calc(100vh - 32px); overflow: auto; }
+    .workspace { padding: 18px; overflow: auto; }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    h2 { margin: 18px 0 10px; font-size: 16px; }
+    p, li, label, .muted, button, input, td, th, select { font-family: var(--font-main); }
+    p, li, label, .muted { font-size: 14px; line-height: 1.5; color: var(--muted); }
+    .btn-row, .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+    button { border: 0; border-radius: 12px; padding: 10px 14px; cursor: pointer; font-size: 14px; font-weight: 700; background: var(--primary); color: #fff; }
+    button.secondary { background: #eef4fb; color: #103a5c; border: 1px solid #cfe0f1; }
+    button.danger { background: #fdeceb; color: var(--danger); border: 1px solid #f3c4bf; }
+    .hint { font-size: 12px; color: var(--muted); }
+
+    .data-grid-wrap { border: 1px solid var(--line-dark); border-radius: 12px; overflow: auto; max-height: 420px; background: #fff; }
+    .data-grid { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
+    .data-grid th, .data-grid td { border: 1px solid var(--line-dark); padding: 8px 10px; text-align: left; vertical-align: middle; min-height: 42px; height: 42px; background: #fff; }
+    .data-grid th { background: #eef3f8; font-weight: 700; position: sticky; top: 0; z-index: 1; }
+    .data-grid th:nth-child(1), .data-grid td:nth-child(1) { width: 44%; }
+    .data-grid th:nth-child(2), .data-grid td:nth-child(2) { width: 38%; }
+    .data-grid th:nth-child(3), .data-grid td:nth-child(3) { width: 18%; }
+    .data-cell { outline: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .data-cell:focus { background: #fffdf2; box-shadow: inset 0 0 0 2px #f0c85a; }
+
+    .summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+    .summary strong { font-size: 18px; }
+    .summary .muted { margin: 0; }
+    .pages { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+    .page { width: var(--page-width); min-height: var(--page-height); background: white; box-shadow: 0 3px 14px rgba(0,0,0,.08); border: 1px solid #ddd; display: grid; grid-template-rows: 1fr 1fr; overflow: hidden; }
+    .label { position: relative; padding: var(--label-padding-top) var(--label-padding-side) var(--label-padding-bottom); display: flex; flex-direction: column; border-bottom: 1px solid #8f8f8f; min-height: 148.5mm; }
+    .page .label:last-child { border-bottom: 0; }
+    .label-stack { display: flex; flex-direction: column; height: 100%; justify-content: space-between; }
+    .label-top { display: flex; flex-direction: column; }
+    .label-header { font-size: var(--label-header-size); font-weight: 700; color: #555; line-height: 1.05; margin-bottom: var(--header-gap); }
+    .label-title { font-size: var(--label-title-size); font-weight: 700; line-height: 1.05; margin: 0; }
+    .label-value { font-size: var(--label-value-size); font-weight: 700; line-height: 1.02; word-break: break-word; margin-top: var(--title-to-value-gap); margin-bottom: 0; }
+    .label-title.hbl-title { margin-top: var(--sid-block-to-hbl-title-gap); }
+    .label-value.hbl { margin-top: var(--hbl-title-to-value-gap); }
+    .label-counter { display:flex; align-items:baseline; justify-content:center; gap: 10mm; margin-top: auto; transform: translateY(calc(-1 * var(--counter-lift))); }
+    .label-counter .counter-num { font-size: var(--label-counter-size); font-weight: 700; line-height: .95; }
+    .label-counter .counter-of { font-size: var(--counter-of-size); font-weight: 700; line-height: 1; }
+
+    @media (max-width: 1250px) { .app { grid-template-columns: 1fr; } .panel { position: static; height: auto; } }
+    @media print {
+      body { background: white; }
+      .panel, .summary .toolbar, .no-print { display: none !important; }
+      .app { display: block; padding: 0; }
+      .workspace { padding: 0; border: 0; box-shadow: none; }
+      .summary { display: none !important; }
+      .pages { gap: 0; }
+      .page { margin: 0; border: 0; box-shadow: none; page-break-after: always; }
+      @page { size: A4 portrait; margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="panel">
+      <h1>DSV Shipping Mark Label Generator</h1>
+
+      <h2>1) วางข้อมูลจาก Excel</h2>
+      <p>ตารางนี้เชื่อมกับ Print Preview โดยตรงตาม mapping นี้:</p>
+      <ul>
+        <li><strong>HBL</strong> = House Bill Of Lading</li>
+        <li><strong>SID</strong> = Shipment Number / Shipping Mark</li>
+        <li><strong>Qty</strong> = จำนวนที่ใช้สร้าง <strong>x OF y</strong></li>
+      </ul>
+      <p>วิธีใช้: copy ช่วงข้อมูลจาก Excel (3 คอลัมน์) แล้วคลิกที่เซลล์แรกในตาราง จากนั้นกด paste ได้ทีเดียวหลายแถว</p>
+      <div class="data-grid-wrap">
+        <table class="data-grid" id="dataGrid">
+          <thead><tr><th>HBL</th><th>SID</th><th>Qty</th></tr></thead>
+          <tbody id="gridBody"></tbody>
+        </table>
+      </div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button id="btnAddRows" class="secondary">Add 20 Rows</button>
+        <button id="btnSample" class="secondary">Load Sample</button>
+        <button id="btnClear" class="danger">Clear Table</button>
+      </div>
+      <div class="hint">ถ้า paste มาจาก Excel แบบ Tab-delimited ระบบจะกระจายค่าลงหลายแถวและหลายคอลัมน์ให้อัตโนมัติ</div>
+    </aside>
+
+    <main class="workspace">
+      <div class="summary">
+        <div><strong>Print Preview</strong><p id="summaryText" class="muted">ยังไม่ได้ generate</p></div>
+        <div class="toolbar no-print">
+          <button id="btnGenerateTop">Generate Labels</button>
+          <button id="btnPrintTop" class="secondary">Print</button>
+        </div>
+      </div>
+      <div id="pages" class="pages"></div>
+    </main>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const fixedHeader = 'DSV · Shipping Mark';
+    const defaultRows = 30;
+    const sampleRows = [
+      ['RKL0069277', '20260202-00828', '10'],
+      ['RKL0072298', '20260325-00106', '6'],
+      ['RKL0072481', '20260326-01551', '3']
+    ];
+
+    function escapeHtml(val) {
+      return String(val ?? '')
+        .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+    }
+    function createRow(values = ['', '', '']) {
+      const tr = document.createElement('tr');
+      [0,1,2].forEach((colIndex) => {
+        const td = document.createElement('td');
+        td.className = 'data-cell'; td.contentEditable = 'true'; td.dataset.col = String(colIndex); td.textContent = values[colIndex] ?? '';
+        tr.appendChild(td);
+      });
+      return tr;
+    }
+    function ensureRowCount(total) { const tbody = $('gridBody'); while (tbody.children.length < total) tbody.appendChild(createRow()); }
+    function initGrid() { const tbody = $('gridBody'); tbody.innerHTML=''; for (let i=0;i<defaultRows;i++) tbody.appendChild(createRow()); bindGridEvents(); }
+    function bindGridEvents() { $('gridBody').querySelectorAll('.data-cell').forEach((cell) => cell.addEventListener('paste', handlePaste)); }
+    function getCellPosition(cell) { return { row: cell.parentElement.rowIndex - 1, col: parseInt(cell.dataset.col || '0', 10) }; }
+    function normalizeClipboard(text) { const lines = text.replace(/\r/g,'').split('\n').filter(line => line.length>0); return lines.map(line => line.split('\t')); }
+    function handlePaste(e) {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text');
+      const matrix = normalizeClipboard(text);
+      if (!matrix.length) return;
+      const start = getCellPosition(e.currentTarget); ensureRowCount(start.row + matrix.length);
+      const rows = Array.from($('gridBody').children);
+      matrix.forEach((line, rIdx) => {
+        const cells = rows[start.row + rIdx].querySelectorAll('.data-cell');
+        for (let cIdx=0;cIdx<3;cIdx++) { if (start.col + cIdx > 2) break; cells[start.col + cIdx].textContent = (line[cIdx] ?? '').trim(); }
+      });
+    }
+    function readRows() {
+      const rows=[]; Array.from($('gridBody').children).forEach((tr) => {
+        const cells = tr.querySelectorAll('.data-cell');
+        const hbl = cells[0]?.textContent.trim() || ''; const sid = cells[1]?.textContent.trim() || ''; const qtyText = cells[2]?.textContent.trim() || ''; const qty = parseInt(qtyText, 10) || 0;
+        if (hbl || sid || qtyText) rows.push({ hbl, sid, qty });
+      }); return rows;
+    }
+    function validateRows(rows) {
+      if (!rows.length) return { ok:false };
+      for (const row of rows) {
+        if (!row.hbl || !row.sid || !Number.isFinite(Number(row.qty)) || Number(row.qty) <= 0) return { ok:false };
+      }
+      return { ok:true };
+    }
+    function createLabel(row, index) {
+      return `<section class="label"><div class="label-stack"><div class="label-top"><div class="label-header">${escapeHtml(fixedHeader)}</div><div class="label-title">Shipment Number / Shipping Mark :</div><div class="label-value sid">${escapeHtml(row.sid)}</div><div class="label-title hbl-title">House Bill Of Lading :</div><div class="label-value hbl">${escapeHtml(row.hbl)}</div></div><div class="label-counter"><span class="counter-num">${index}</span><span class="counter-of">OF</span><span class="counter-num">${row.qty}</span></div></div></section>`;
+    }
+    function generateLabels() {
+      const rows = readRows(); const check = validateRows(rows);
+      if (!check.ok) { $('pages').innerHTML=''; $('summaryText').textContent='ยังไม่ได้ generate'; return; }
+      const labels=[]; rows.forEach((row)=>{ for (let i=1;i<=row.qty;i++) labels.push(createLabel(row,i)); });
+      const pages=[]; for (let i=0;i<labels.length;i+=2) pages.push(`<div class="page">${labels[i] || '<section class="label"></section>'}${labels[i+1] || '<section class="label"></section>'}</div>`);
+      $('pages').innerHTML = pages.join(''); $('summaryText').textContent = `ข้อมูล ${rows.length} แถว · label ${labels.length} ป้าย · ${pages.length} หน้า`;
+    }
+    function clearTable(){ initGrid(); $('pages').innerHTML=''; $('summaryText').textContent='ยังไม่ได้ generate'; }
+    function addRows(count=20){ ensureRowCount($('gridBody').children.length + count); bindGridEvents(); }
+    function loadSample(){ clearTable(); ensureRowCount(Math.max(defaultRows, sampleRows.length)); const rows = Array.from($('gridBody').children); sampleRows.forEach((vals, idx)=>{ const cells = rows[idx].querySelectorAll('.data-cell'); cells[0].textContent = vals[0]; cells[1].textContent = vals[1]; cells[2].textContent = vals[2]; }); generateLabels(); }
+    $('btnAddRows').addEventListener('click', () => addRows(20));
+    $('btnSample').addEventListener('click', loadSample);
+    $('btnClear').addEventListener('click', clearTable);
+    $('btnGenerateTop').addEventListener('click', generateLabels);
+    function printLabels(){
+      generateLabels();
+      const previousTitle = document.title;
+      document.title = 'Shipping mark T.';
+      setTimeout(() => {
+        window.print();
+        setTimeout(() => { document.title = previousTitle; }, 800);
+      }, 100);
+    }
+    $('btnPrintTop').addEventListener('click', printLabels);
+
+  </script>
+</body>
+</html>
